@@ -7,8 +7,9 @@ import gymnasium as gym
 import matplotlib.pyplot as plt 
 
 from testing_envs import *
-from ClassicRLAlgorithm import *
+from ValueEstimationAlgorithm import *
 from DeepQRLAlgorithm import *
+from REINFORCEAlgorithm import *
 import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -43,7 +44,7 @@ parser.add_argument(
     "-a",
     type=str,
     help="The type of algorithm that you will be using. classic_RL includes PI, VI, SARSA, Q_learning",
-    choices=["classic_RL", "policy_iteration", "value_iteration", "SARSA", "Q_learning", "DQN"],
+    choices=["classic_RL", "policy_iteration", "value_iteration", "SARSA", "Q_learning", "DQN", "REINFORCE"],
     default="DQN",
 )
 
@@ -57,7 +58,7 @@ parser.add_argument(
 
 
 
-def render_testing(env, policy, DQN = None, max_steps=1000):
+def render_testing(env, policy, DQN = None, REINFORCE = None,  max_steps=1000):
     """
     This function does not need to be modified
     Renders policy once on environment. Watch your agent play!
@@ -82,6 +83,8 @@ def render_testing(env, policy, DQN = None, max_steps=1000):
             # time.sleep(0.01)
             if DQN is not None:
                 a = DQN.online_net.act(ob)
+            elif REINFORCE is not None:
+                a, _ = REINFORCE.online_net.act(ob)        
             else:
                 a = policy[ob]
             ob, rew, done, _, _ = env.step(a)
@@ -107,26 +110,26 @@ def render_testing(env, policy, DQN = None, max_steps=1000):
 def call_function(args_algorithm = "classic_RL"):
     
     # Testing only policy iteration alone.
-    classic_RL_algorithm_tester = ClassicRLAlgorithmTester(env, args.env)
+    value_estimation_algorithm_tester = ValueEstimationAlgorithmTester(env, args.env)
 
 
     if args_algorithm == "policy_iteration":
         print("\n" + "-" * 25 + "\nBeginning Policy Iteration\n" + "-" * 25)
-        V_pi, p_pi= classic_RL_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
+        V_pi, p_pi= value_estimation_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
     
     # Testing only value iteration alone.
     elif args_algorithm == "value_iteration": 
         print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
-        V_pi, p_pi = classic_RL_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3)
+        V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
     
     elif args_algorithm == "SARSA":
         print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
-        Q_pi, p_pi, _ = classic_RL_algorithm_tester.SARSA(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
+        Q_pi, p_pi, _ = value_estimation_algorithm_tester.SARSA(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
         # mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
 
@@ -134,7 +137,7 @@ def call_function(args_algorithm = "classic_RL"):
 
     elif args_algorithm == "Q_learning":
         print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
-        Q_pi, p_pi, _ = classic_RL_algorithm_tester.Q_Learning(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
+        Q_pi, p_pi, _ = value_estimation_algorithm_tester.Q_Learning(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
@@ -143,25 +146,30 @@ def call_function(args_algorithm = "classic_RL"):
         deep_q_rl_algorithm_tester = DeepQRLAlgorithmTester(env)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, deep_q_rl_algorithm_tester)
     
+    elif args_algorithm == "REINFORCE":
+        print("\n" + "-" * 25 + "\nBeginning REINFORCE\n" + "-" * 25)
+        REINFORCE_algorithm_tester = REINFORCEAlgorithmTester(env)
+        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, REINFORCE_algorithm_tester)
+    
     # Testing classic_RL algorithms at once.
     else:
         print("\n" + "-" * 25 + "\nBeginning Policy Iteration\n" + "-" * 25)
-        V_pi, p_pi = classic_RL_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
+        V_pi, p_pi = value_estimation_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
         print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
-        V_pi, p_pi = classic_RL_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3) 
+        V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3) 
         mean_reward, std_reward, episode_reward_list_s = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
         print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
-        Q_pi_SARSA, p_pi, episode_reward_list_s = classic_RL_algorithm_tester.SARSA(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
+        Q_pi_SARSA, p_pi, episode_reward_list_s = value_estimation_algorithm_tester.SARSA(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
         print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
-        Q_pi_Q_Learning, p_pi, episode_reward_list_q = classic_RL_algorithm_tester.Q_Learning(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
+        Q_pi_Q_Learning, p_pi, episode_reward_list_q = value_estimation_algorithm_tester.Q_Learning(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing) 
 

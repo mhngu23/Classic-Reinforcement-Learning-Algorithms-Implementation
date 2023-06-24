@@ -1,4 +1,5 @@
 import torch
+from tqdm import trange
 from collections import deque
 import itertools
 import numpy as np
@@ -7,9 +8,9 @@ import random
 from torch import nn
 import torch.nn.functional as F
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 import utils
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 GAMMA=0.99
 BATCH_SIZE = 32
@@ -58,15 +59,14 @@ class DeepQRLAlgorithmTester:
 		Self
 		----------
 			self.replay_memory_D: A dataset to store experiences at each time step, e_t = (s_t, a_t, r_t, s_t+1), D_t = {e_1, ..., e_t}
-			self.rew_buffer:
-			self.episode_reward:
-			self.online_net:
+			self.rew_buffer: A buffer to record all rewards per episode.
+			self.episode_reward: Record reward per episode.
+			self.online_net: Training network
 			self.target_net: To generate y_i 
-			self.optimizer
 		"""
 
 		self.replay_memory_D = deque(maxlen=BUFFER_SIZE)
-		self.rew_buffer = deque([0,0], maxlen=1000)
+		self.rew_buffer = deque([0, 0], maxlen=100)
 		self.episode_reward = 0
 		
 		# Create the two networks
@@ -137,12 +137,14 @@ class DeepQRLAlgorithmTester:
 
 	def main_iteration(self, env):
 		if torch.cuda.is_available():
-			num_episodes = 2000
+			num_episodes = 500
 		else:
 			num_episodes = 50
 		mean_reward_list = []
+		
+		t = trange(num_episodes)
 
-		for i_episode in range(num_episodes):
+		for i_episode in t:
 			state, _ = env.reset()
 			for step in itertools.count():
 				# With prob epsilon select a action
@@ -154,30 +156,29 @@ class DeepQRLAlgorithmTester:
 				
 				# Store transition in replay_memory
 				self.replay_memory_D.append(transition)
-
 				state = new_states
 				self.episode_reward += rew
+
 				if done:
 					state, _ = env.reset() 
 					self.rew_buffer.append(self.episode_reward)
+					# Logging
+					print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
+					mean_reward_list.append(np.mean(self.rew_buffer))
 					self.episode_reward = 0
 					break
-				
-				# if len(self.rew_buffer) >= 100:
-				# 	if np.mean(self.rew_buffer) >= 100:
-				# 		break
 
 				# Sample random minibatch equals to BATCH_SIZE
 				states_t, actions_t, rewards_t, dones_t, new_states_t = self.__sample_from_replay_memory__()
 
 				# Compute Targets
-				target_q_values = self.target_net(new_states_t) # Calculate the Q value using the network used to calculate target value
+				target_q_values = self.target_net.forward(new_states_t) # Calculate the Q value using the network used to calculate target value
 				max_target_q_values = target_q_values.max(dim=1, keepdim = True)[0] # Only keep the maximum value between actions
 
 				targets = rewards_t + GAMMA * (1-dones_t) * max_target_q_values
 
 				# Compute Currents
-				q_values = self.online_net(states_t)
+				q_values = self.online_net.forward(states_t)
 
 				action_q_values = torch.gather(input=q_values, dim=1, index=actions_t)
 
@@ -193,10 +194,7 @@ class DeepQRLAlgorithmTester:
 				if step % TARGET_UPDATE_FREQ == 0:
 					self.target_net.load_state_dict(self.online_net.state_dict())
 				
-			# Logging
-			print("Episode", i_episode)
-			print("Mean Episode Reward", np.mean(self.rew_buffer))
-			mean_reward_list.append(np.mean(self.rew_buffer))
+		
 
 		utils.plot_change_in_each_step(None, mean_reward_list)
 
