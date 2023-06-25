@@ -1,9 +1,10 @@
-import torch
-from tqdm import trange
+import random
 from collections import deque
 import itertools
+
+import torch
 import numpy as np
-import random
+from tqdm import trange
 
 from torch import nn
 import torch.nn.functional as F
@@ -33,7 +34,6 @@ class Network(nn.Module):
         n_actions = env.action_space.n
         self.layer1 = nn.Linear(num_observations, 128)
         self.layer2 = nn.Tanh()
-        # self.layer2 = nn.Linear(128, 128)
         self.layer3 = nn.Linear(128, n_actions)
 	
     def forward(self, x):
@@ -59,10 +59,10 @@ class DeepQRLAlgorithmTester:
 		Self
 		----------
 			self.replay_memory_D: A dataset to store experiences at each time step, e_t = (s_t, a_t, r_t, s_t+1), D_t = {e_1, ..., e_t}
-			self.rew_buffer: A buffer to record all rewards per episode.
-			self.episode_reward: Record reward per episode.
-			self.online_net: Training network
+			self.episode_reward: Current episode reward.
+			self.online_net: Main training network.
 			self.target_net: To generate y_i 
+			self.optimizer: Optimization method
 		"""
 
 		self.replay_memory_D = deque(maxlen=BUFFER_SIZE)
@@ -160,12 +160,6 @@ class DeepQRLAlgorithmTester:
 				self.episode_reward += rew
 
 				if done:
-					state, _ = env.reset() 
-					self.rew_buffer.append(self.episode_reward)
-					# Logging
-					print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
-					mean_reward_list.append(np.mean(self.rew_buffer))
-					self.episode_reward = 0
 					break
 
 				# Sample random minibatch equals to BATCH_SIZE
@@ -179,11 +173,10 @@ class DeepQRLAlgorithmTester:
 
 				# Compute Currents
 				q_values = self.online_net.forward(states_t)
-
 				action_q_values = torch.gather(input=q_values, dim=1, index=actions_t)
 
 				# Compute Loss
-				loss = nn.functional.smooth_l1_loss(action_q_values, targets)
+				loss = nn.functional.smooth_l1_loss(action_q_values, targets) # Similar to MSE Loss
 
 				# Gradient Descent
 				self.optimizer.zero_grad()
@@ -193,7 +186,11 @@ class DeepQRLAlgorithmTester:
 				# Update target network
 				if step % TARGET_UPDATE_FREQ == 0:
 					self.target_net.load_state_dict(self.online_net.state_dict())
-				
+			self.rew_buffer.append(self.episode_reward)
+			# Logging
+			print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
+			mean_reward_list.append(np.mean(self.rew_buffer))
+			self.episode_reward = 0	
 		
 
 		utils.plot_change_in_each_step(None, mean_reward_list)

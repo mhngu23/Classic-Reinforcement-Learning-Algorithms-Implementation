@@ -16,7 +16,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 GAMMA=0.99
 
-class Network(nn.Module):
+class Network1(nn.Module):
     def __init__(self, env):
         super().__init__()
         observation_space = env.observation_space
@@ -37,9 +37,26 @@ class Network(nn.Module):
         m = Categorical(action_probs)
         action = m.sample()
         return action.item(), m.log_prob(action)
+
+class Network2(nn.Module):
+    def __init__(self, env):
+        super().__init__()
+        observation_space = env.observation_space
+		# Retrieve the number of observations
+        num_observations = observation_space.shape[0] 
+        n_actions = env.action_space.n
+        self.layer1 = nn.Linear(num_observations, 128)
+        self.layer2 = nn.Tanh()
+        self.layer3 = nn.Linear(128, 1)
+	
+    def forward(self, x):
+        x = F.relu(self.layer1(x))
+        x = self.layer2(x)
+        x = self.layer3(x)
+        return x
         
 
-class REINFORCEAlgorithmTester:
+class ActorCriticAlgorithmTester:
 	def __init__(self, env):
 		"""
 		Parameters
@@ -57,9 +74,12 @@ class REINFORCEAlgorithmTester:
 		self.episode_reward = 0
 		
 		# Create the network/policy
-		self.policy = Network(env).to(device)
+		self.policy = Network1(env).to(device)
+		self.state_value = Network2(env).to(device)
+
 		
-		self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+		self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+		self.state_value_optimizer = torch.optim.Adam(self.state_value.parameters(), lr=5e-4)
 						
 		self.main_iteration(env)
 	
@@ -76,7 +96,7 @@ class REINFORCEAlgorithmTester:
 
 	def main_iteration(self, env):
 		if torch.cuda.is_available():
-			num_episodes = 500
+			num_episodes = 10000
 		else:
 			num_episodes = 50
 			
@@ -84,41 +104,53 @@ class REINFORCEAlgorithmTester:
 		t = trange(num_episodes)
 
 		for i_episode in t:
-			saved_log_probs = []
 			rewards = []
+			I = 1
 			state, _ = env.reset()
 			for step in itertools.count():
 				action, log_prob = self.policy.act(state)
-				saved_log_probs.append(log_prob)
 
 				# Execute action and observe result
-				new_states, rew, done, _, _ = env.step(action)
+				new_state, rew, done, _, _ = env.step(action)
 				rewards.append(rew)
+				
+                # Get the value of current state and next state
+				state_t = torch.from_numpy(state).float().unsqueeze(0).to(device)
+				new_state_t = torch.from_numpy(state).float().unsqueeze(0).to(device)
 
+				state_value = self.state_value(state_t)
+				new_state_value = self.state_value(new_state_t)
+				
 				self.episode_reward += rew
-				if done: 
+				if done:
+					# state, _ = env.reset() 
+					
 					break
+				
+				val_loss = F.mse_loss(rew + GAMMA * new_state_value, state_value) * I
+       
+				advantage_function = rew + GAMMA * new_state_value.item() - state_value.item()
+				policy_loss = -log_prob.to(device) * advantage_function * I
+				# policy_loss = policy_loss.sum()
 
-                # Calculate loss
-				discounted_returns = self.__calculate_discounted_returns__(rewards)
-				discounted_returns_t = torch.tensor(discounted_returns)
-
-				loss = []
-				for log_prob, disc_return in zip(saved_log_probs, discounted_returns_t):
-					loss.append(-log_prob.to(device) * disc_return.to(device))
-				loss = torch.cat(loss).sum()
 
 				# Gradient Descent
-				self.optimizer.zero_grad()
-				loss.backward(retain_graph=True)
-				self.optimizer.step()
+				self.state_value_optimizer.zero_grad()
+				val_loss.backward()
+				self.state_value_optimizer.step()	
 
-				# Update state with new_state
-				state = new_states
+				self.policy_optimizer.zero_grad()
+				policy_loss.backward(retain_graph=True)
+				self.policy_optimizer.step()
+				
+							
+                # Update state with new_state
+				state = new_state	
+				I *= GAMMA
 			self.rew_buffer.append(self.episode_reward)
 			# Logging
 			print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
 			mean_reward_list.append(np.mean(self.rew_buffer))	
-			self.episode_reward = 0
-	
+			self.episode_reward = 0			
+				
 		utils.plot_change_in_each_step(None, mean_reward_list)
