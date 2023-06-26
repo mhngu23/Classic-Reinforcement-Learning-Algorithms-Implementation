@@ -10,7 +10,7 @@ from testing_envs import *
 from ValueEstimationAlgorithm import *
 from DeepQRLAlgorithm import *
 from REINFORCEAlgorithm import *
-from Actor_Critic_TD0_Algorithm import *
+from Actor_Critic_A2C_Algorithm import *
 import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -45,7 +45,8 @@ parser.add_argument(
     "-a",
     type=str,
     help="The type of algorithm that you will be using. classic_RL includes PI, VI, SARSA, Q_learning",
-    choices=["classic_RL", "policy_iteration", "value_iteration", "Comparing_Classic", "SARSA", "Q_learning", "DQN", "REINFORCE", "A2C"],
+    choices=["classic_RL", "policy_iteration", "value_iteration", "Comparing_Classic", "SARSA",
+              "Q_learning", "DQN", "REINFORCE", "A2C"],
     default="A2C",
 )
 
@@ -87,7 +88,7 @@ def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_st
             elif REINFORCE is not None:
                 a, _ = REINFORCE.policy.act(ob)        
             elif A2C is not None:
-                a, _ = A2C.policy.act(ob)                 
+                a, _, _ = A2C.policy.act(ob)                 
             else:
                 a = policy[ob]
             ob, rew, done, _, _ = env.step(a)
@@ -114,30 +115,29 @@ def call_function(args_algorithm = "classic_RL"):
     
     value_estimation_algorithm_tester = ValueEstimationAlgorithmTester(env, args.env)
 
-
     if args_algorithm == "policy_iteration":
         print("\n" + "-" * 25 + "\nBeginning Policy Iteration\n" + "-" * 25)
         V_pi, p_pi= value_estimation_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
         utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
     
-    elif args_algorithm == "value_iteration": 
-        print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
-        V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
+    # elif args_algorithm == "value_iteration": 
+    #     print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
+    #     V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
     
-    elif args_algorithm == "SARSA":
-        print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
-        Q_pi, p_pi, _ = value_estimation_algorithm_tester.SARSA(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)   
+    # elif args_algorithm == "SARSA":
+    #     print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
+    #     Q_pi, p_pi, _ = value_estimation_algorithm_tester.SARSA(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)   
 
-    elif args_algorithm == "Q_learning":
-        print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
-        Q_pi, p_pi, _ = value_estimation_algorithm_tester.Q_Learning(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
+    # elif args_algorithm == "Q_learning":
+    #     print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
+    #     Q_pi, p_pi, _ = value_estimation_algorithm_tester.Q_Learning(alpha=0.5, gamma=0.95, epsilon=0.1, n_episodes=1000)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
     elif args_algorithm == "DQN":
         print("\n" + "-" * 25 + "\nBeginning DQN\n" + "-" * 25)
@@ -152,7 +152,7 @@ def call_function(args_algorithm = "classic_RL"):
     elif args_algorithm == "A2C":
         print("\n" + "-" * 25 + "\nBeginning A2C\n" + "-" * 25)
         Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, Actor_Critic_algorithm_tester)    
+        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, None, Actor_Critic_algorithm_tester)    
     
     # Testing classic_RL algorithms at once.
     elif args_algorithm == "Comparing_Classic":

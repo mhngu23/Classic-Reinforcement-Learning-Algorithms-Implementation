@@ -19,7 +19,7 @@ BUFFER_SIZE = 50000
 MIN_REPLAY_SIZE = 1000
 EPSILON_START = 1.0
 EPSILON_END = 0.02
-EPSILON = 0.5
+EPSILON = 0.1
 EPSILON_DECAY = 10000
 TARGET_UPDATE_FREQ = 1000
 NUM_STEPS = 1000
@@ -108,6 +108,7 @@ class DeepQRLAlgorithmTester:
 		random_prob = np.random.random()
 
 		epsilon =np.interp(step, [0, EPSILON_DECAY], [EPSILON_START, EPSILON_END])
+		# epsilon = EPSILON
 		     
 		if random_prob <= epsilon:
 			# Explore
@@ -186,12 +187,13 @@ class DeepQRLAlgorithmTester:
 				# Update target network
 				if step % TARGET_UPDATE_FREQ == 0:
 					self.target_net.load_state_dict(self.online_net.state_dict())
-			self.rew_buffer.append(self.episode_reward)
-			# Logging
-			print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
-			mean_reward_list.append(np.mean(self.rew_buffer))
-			self.episode_reward = 0	
-		
+
+				self.rew_buffer.append(self.episode_reward)
+				# Logging
+				print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
+				mean_reward_list.append(np.mean(self.rew_buffer))
+				self.episode_reward = 0	
+			
 
 		utils.plot_change_in_each_step(None, mean_reward_list)
 

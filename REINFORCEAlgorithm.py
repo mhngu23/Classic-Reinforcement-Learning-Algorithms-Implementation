@@ -95,26 +95,30 @@ class REINFORCEAlgorithmTester:
 				new_states, rew, done, _, _ = env.step(action)
 				rewards.append(rew)
 
+				# Update state with new_state
+				state = new_states
 				self.episode_reward += rew
 				if done: 
 					break
 
-                # Calculate loss
-				discounted_returns = self.__calculate_discounted_returns__(rewards)
-				discounted_returns_t = torch.tensor(discounted_returns)
+			# Calculate loss
+			discounted_returns = self.__calculate_discounted_returns__(rewards)
+			discounted_returns_t = torch.tensor(discounted_returns)
 
-				loss = []
-				for log_prob, disc_return in zip(saved_log_probs, discounted_returns_t):
-					loss.append(-log_prob.to(device) * disc_return.to(device))
-				loss = torch.cat(loss).sum()
+			loss = []
+			for log_prob, disc_return in zip(saved_log_probs, discounted_returns_t):
+				loss.append(-log_prob.to(device) * disc_return.to(device))
+			loss = torch.cat(loss).sum()
 
-				# Gradient Descent
-				self.optimizer.zero_grad()
-				loss.backward(retain_graph=True)
-				self.optimizer.step()
+			# Gradient Descent
+			self.optimizer.zero_grad()
+			loss.backward(retain_graph=True)
+			self.optimizer.step()
+			
+			saved_log_probs = []
+			rewards = []
 
-				# Update state with new_state
-				state = new_states
+
 			self.rew_buffer.append(self.episode_reward)
 			# Logging
 			print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
