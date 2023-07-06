@@ -27,10 +27,12 @@ def updating_dictionary(value, dictionary):
         dictionary[value] = 1
     return dictionary
 
-def plot_change_in_each_step(change_in_value_function = None, reward = None):
+def show_result(change_in_value_function = None, reward = None, change_in_training = None, algo_name = None):
     if change_in_value_function is not None:
         df = pd.DataFrame({'step': [i for i in range(len(change_in_value_function))],
                     'change_in_value_function': change_in_value_function})
+        df.to_csv(algo_name + '.csv', index=False)    
+    
         plt.figure(1)
         plt.plot(df.step, df.change_in_value_function, c = "orange", label='Change in value function after each step', linewidth=3)
         #add title and axis labels
@@ -49,7 +51,18 @@ def plot_change_in_each_step(change_in_value_function = None, reward = None):
         plt.xlabel('Improvement Step')
         plt.ylabel('Training Reward')
         plt.legend()
+    
+    if change_in_training is not None:
+        min_length_item = min(len(item) for item in change_in_training)    
+    #    print(max(len(item) for item in change_in_training))
+        # for item in change_in_training:
+        #    item = item[0:min_length_item]
+        dict_random = {}
+        for item in range(len(change_in_training)):
+             dict_random.update({"change_in_training_" + str(item):change_in_training[item][0:min_length_item]})
 
+        df = pd.DataFrame(dict_random)
+        df.to_csv(algo_name + '.csv', index=False)    
     plt.show()
     return
 

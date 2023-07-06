@@ -1,6 +1,7 @@
 import random
 from collections import deque
 import itertools
+import math
 
 import torch
 import numpy as np
@@ -15,43 +16,61 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 GAMMA=0.99
 BATCH_SIZE = 32
-BUFFER_SIZE = 50000
-MIN_REPLAY_SIZE = 1000
-EPSILON_START = 1.0
-EPSILON_END = 0.02
-EPSILON = 0.1
-EPSILON_DECAY = 10000
+BUFFER_SIZE = 1000
+MIN_REPLAY_SIZE = 100
+EPSILON_START = 0.9
+EPSILON_END = 0.05
+EPSILON_DECAY = 1000
 TARGET_UPDATE_FREQ = 1000
-NUM_STEPS = 1000
 
 	
 class Network(nn.Module):
     def __init__(self, env):
         super().__init__()
-        observation_space = env.observation_space
 		# Retrieve the number of observations
-        num_observations = observation_space.shape[0] 
-        n_actions = env.action_space.n
+        num_observations = env.observation_space.shape[0] 
+        self.n_actions = env.action_space.n
         self.layer1 = nn.Linear(num_observations, 128)
         self.layer2 = nn.Tanh()
-        self.layer3 = nn.Linear(128, n_actions)
+        self.layer3 = nn.Linear(128, self.n_actions)
 	
     def forward(self, x):
         x = F.relu(self.layer1(x))
         x = self.layer2(x)
         x = self.layer3(x)
         return x
-	
-    def act(self, state):
-        state = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0).to(device) # Adding another dimension to the torch array with unsqueeze
-        Q = self.forward(state).cpu() 
-        max_q_index = torch.argmax(Q, dim=1)[0]
-        action = max_q_index.detach().item()
-        return action 
+    
+    def act(self, state, epsilon):
+        if random.random() > epsilon:
+            state = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0).to(device) # Adding another dimension to the torch array with unsqueeze
+            Q = self.forward(state).cpu() 
+            max_q_index = torch.argmax(Q, dim=1)[0]
+            action = max_q_index.detach().item()
+        else:
+            action = random.randrange(self.n_actions)
+        return action
+    
+class ReplayBuffer(object):
+    def __init__(self, capacity):
+        self.buffer = deque(maxlen=capacity)
+    
+    def push(self, state, action, reward, next_state, done):
+        state      = np.expand_dims(state, 0)
+        next_state = np.expand_dims(next_state, 0)
+            
+        self.buffer.append((state, action, reward, next_state, done))
+    
+    def sample(self, batch_size):
+        state, action, reward, next_state, done = zip(*random.sample(self.buffer, batch_size))
+        return np.concatenate(state), action, reward, np.concatenate(next_state), done
+    
+    def __len__(self):
+        return len(self.buffer)
+
 
 class DeepQRLAlgorithmTester:
     
-	def __init__(self, env):
+	def __init__(self, env, train_seed = None, training_time = None):
 		"""
 		Parameters
 		----------
@@ -64,120 +83,100 @@ class DeepQRLAlgorithmTester:
 			self.target_net: To generate y_i 
 			self.optimizer: Optimization method
 		"""
-
-		self.replay_memory_D = deque(maxlen=BUFFER_SIZE)
-		self.rew_buffer = deque([0, 0], maxlen=100)
-		self.episode_reward = 0
-		
-		# Create the two networks
-		self.online_net = Network(env).to(device)
-		self.target_net = Network(env).to(device)
-		self.target_net.load_state_dict(self.online_net.state_dict())	# Load saved state of online network
-		
-		self.optimizer = torch.optim.Adam(self.online_net.parameters(), lr=5e-4)
-		
-
-		self.__init_replay_memory__(env)
-				
-		self.main_iteration(env)
-		
-		
-	def __init_replay_memory__(self, env):
-		"""
-		Initialize self.replay_memory_D memory dataset consists of MIN_REPLAY_SIZE numbers of sample.
-		Example: 
-			if MIN_REPLAY_SIZE = 1000, self.replay_memory_D_memory consists of 1000 tuple (state, action, rew, done, new_states)
-
-		"""
-		state, _ = env.reset()
-		for _ in range(MIN_REPLAY_SIZE):
-			action = env.action_space.sample()	# Return a random action
-			new_states, rew, done, _, _ = env.step(action)
-			transition = (state, action, rew, done, new_states)
-			self.replay_memory_D.append(transition)
-			state = new_states
-
-			if done:
-				# If done before MIN_REPLAY_SIZE then restart
-				state, _ = env.reset()  
-	
-	def __epsilon_greedy_policy__(self, env, state, step):
-		"""
-		Epsilon greedy policy function.
-		"""
-		random_prob = np.random.random()
-
-		epsilon =np.interp(step, [0, EPSILON_DECAY], [EPSILON_START, EPSILON_END])
-		# epsilon = EPSILON
-		     
-		if random_prob <= epsilon:
-			# Explore
-			action = env.action_space.sample()
+		if torch.cuda.is_available() and train_seed is None:
+			self.num_episodes = 500
+		elif torch.cuda.is_available() and train_seed is not None:
+			self.num_episodes = len(train_seed)
 		else:
-			# Exploit
-			action = self.online_net.act(state)
-		return action
+			self.num_episodes = 50
+		self.epsilon_by_frame = lambda frame_idx: EPSILON_END + (EPSILON_START - EPSILON_END) * math.exp(-1. * frame_idx / EPSILON_DECAY)
+
+		self.episode_duration_list = []
+	
+		for _ in range(training_time):		
+
+			self.replay_memory_D = ReplayBuffer(1000)
+			self.episode_reward = 0
+			self.episode_duration = []
+
+			# Create the two networks
+			self.online_net = Network(env).to(device)
+			self.target_net = Network(env).to(device)
+			self.target_net.load_state_dict(self.online_net.state_dict())	# Load saved state of online network
+			
+			self.optimizer = torch.optim.Adam(self.online_net.parameters(), lr=5e-4)
+
+			self.main_iteration(env)
+			self.episode_duration_list.append(self.episode_duration)
+			self.episode_duration = []
+
+		utils.show_result(change_in_training=self.episode_duration_list, algo_name = "dqn")
+
 	
 	def __sample_from_replay_memory__(self):
-		transitions = random.sample(self.replay_memory_D, BATCH_SIZE)
+		state, action, reward, done, next_state = self.replay_memory_D.sample(batch_size=BATCH_SIZE)
 
-		states = np.asarray([t[0] for t in transitions])
-		actions = np.asarray([t[1] for t in transitions])
-		rewards = np.asarray([t[2] for t in transitions])
-		dones = np.asarray([t[3] for t in transitions])
-		new_states = np.asarray([t[4] for t in transitions])
+		# states = np.asarray([t[0] for t in transitions])
+		# actions = np.asarray([t[1] for t in transitions])
+		# rewards = np.asarray([t[2] for t in transitions])
+		# dones = np.asarray([t[3] for t in transitions])
+		# new_states = np.asarray([t[4] for t in transitions])
 
-		states_t = torch.as_tensor(states, dtype=torch.float32).to(device)
-		actions_t = torch.as_tensor(actions, dtype=torch.int64).unsqueeze(-1).to(device)
-		rewards_t = torch.as_tensor(rewards, dtype=torch.float32).unsqueeze(-1).to(device)
-		dones_t = torch.as_tensor(dones, dtype=torch.float32).unsqueeze(-1).to(device)
-		new_states_t = torch.as_tensor(new_states, dtype=torch.float32).to(device)
+		# states_t = torch.as_tensor(states, dtype=torch.float32).to(device)
+		# actions_t = torch.LongTensor(actions).to(device)
+		# rewards_t = torch.as_tensor(rewards, dtype=torch.float32).unsqueeze(-1).to(device)
+		# dones_t = torch.as_tensor(dones, dtype=torch.float32).unsqueeze(-1).to(device)
+		# new_states_t = torch.as_tensor(new_states, dtype=torch.float32).to(device)
 
-		return states_t, actions_t, rewards_t, dones_t, new_states_t
+		state_t      = torch.FloatTensor(np.float32(state)).to(device)
+		next_state_t = torch.FloatTensor(np.float32(next_state)).to(device)
+		action_t     = torch.LongTensor(action).to(device)
+		reward_t     = torch.FloatTensor(reward).to(device)
+		done_t       = torch.FloatTensor(done).to(device)
+
+		return state_t, action_t, reward_t, done_t, next_state_t
 
 
 	def main_iteration(self, env):
-		if torch.cuda.is_available():
-			num_episodes = 500
-		else:
-			num_episodes = 50
-		mean_reward_list = []
 		
-		t = trange(num_episodes)
+		# t = trange(self.num_episodes)
+		# for i_episode in t:
+		# 	state, _ = env.reset(seed = i_episode)
+		seed = 0
+		state, _ = env.reset(seed = seed)
+		for step in range(1, 30000):
+			epsilon = self.epsilon_by_frame(step)
+			# With prob epsilon select a action
+			action = self.online_net.act(state, epsilon)
+			
+			# Execute action and observe result
+			new_states, rew, done, _, _ = env.step(action)
+			
+			# Store transition in replay_memory
+			self.replay_memory_D.push(state, action, rew, done, new_states)
+			
+			state = new_states
+			self.episode_reward += rew
 
-		for i_episode in t:
-			state, _ = env.reset()
-			for step in itertools.count():
-				# With prob epsilon select a action
-				action = self.__epsilon_greedy_policy__(env, state, step)
-				
-				# Execute action and observe result
-				new_states, rew, done, _, _ = env.step(action)
-				transition = (state, action, rew, done, new_states)
-				
-				# Store transition in replay_memory
-				self.replay_memory_D.append(transition)
-				state = new_states
-				self.episode_reward += rew
-
-				if done:
-					break
+			if done:
+				print(self.episode_reward+1)
+				self.episode_duration.append(self.episode_reward+1)
+				self.episode_reward = 0	
+								
+			if len(self.replay_memory_D) > BATCH_SIZE:
 
 				# Sample random minibatch equals to BATCH_SIZE
 				states_t, actions_t, rewards_t, dones_t, new_states_t = self.__sample_from_replay_memory__()
 
-				# Compute Targets
-				target_q_values = self.target_net.forward(new_states_t) # Calculate the Q value using the network used to calculate target value
-				max_target_q_values = target_q_values.max(dim=1, keepdim = True)[0] # Only keep the maximum value between actions
+				q_values      = self.online_net.forward(states_t)
+				next_q_values = self.target_net.forward(new_states_t)
 
-				targets = rewards_t + GAMMA * (1-dones_t) * max_target_q_values
-
-				# Compute Currents
-				q_values = self.online_net.forward(states_t)
-				action_q_values = torch.gather(input=q_values, dim=1, index=actions_t)
-
-				# Compute Loss
-				loss = nn.functional.smooth_l1_loss(action_q_values, targets) # Similar to MSE Loss
+				q_value          = q_values.gather(1, actions_t.unsqueeze(1)).squeeze(1)
+				next_q_value     = next_q_values.max(1)[0]
+				expected_q_value = rewards_t + GAMMA * next_q_value * (1 - dones_t)
+				
+				# loss = (q_value - Variable(expected_q_value.data)).pow(2).mean()
+				loss = nn.functional.smooth_l1_loss(q_value, expected_q_value) # Similar to MSE Loss
 
 				# Gradient Descent
 				self.optimizer.zero_grad()
@@ -188,14 +187,16 @@ class DeepQRLAlgorithmTester:
 				if step % TARGET_UPDATE_FREQ == 0:
 					self.target_net.load_state_dict(self.online_net.state_dict())
 
-				self.rew_buffer.append(self.episode_reward)
-				# Logging
-				print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
-				mean_reward_list.append(np.mean(self.rew_buffer))
-				self.episode_reward = 0	
-			
+			if done:
+				seed += 1
+				state, _ = env.reset(seed = seed)
 
-		utils.plot_change_in_each_step(None, mean_reward_list)
+		
+
+	
+					
+				
+
 
 				
 

@@ -14,11 +14,11 @@ class ValueEstimationAlgorithmTester:
 			env: Testing env object
 		"""
 		self.env = env
-		if env_name not in  ("TaxiEnv-v3", "CartPoleEnv-v0"): 
+		if env_name not in  ("TaxiEnv-v3", "CartPoleEnv-v0", "Pendulum-v1"): 
 			self.nS = self.env.nrow * self.env.ncol
 			self.nA = 4
 			self.P = self.env.P
-		elif self.env == "CartPoleEnv-v0":
+		elif self.env in ("Pendulum-v1", "CartPoleEnv-v0"):
 			print(self.env)
 		elif env_name == "TaxiEnv-v3":
 			self.nS = 500
@@ -132,7 +132,7 @@ class ValueEstimationAlgorithmTester:
 			else:
 				break
 
-		utils.plot_change_in_each_step(change_in_value_function_list, None)
+		utils.show_result(change_in_value_function_list, None)
 		
 		return value_function, policy
 
@@ -187,7 +187,7 @@ class ValueEstimationAlgorithmTester:
 
 			policy[state] = np.argmax(actions_reward)
 
-		utils.plot_change_in_each_step(change_in_value_function_list, None)
+		utils.show_result(change_in_value_function_list, None)
 		
 		return value_function, policy
 
@@ -245,7 +245,7 @@ class ValueEstimationAlgorithmTester:
 		for s in range(self.nS):     
 			policy[s] = np.argmax(new_value_function[s, :])
 
-		utils.plot_change_in_each_step(None, episode_reward_list)
+		utils.show_result(None, episode_reward_list)
 		
 		
 		return value_function, policy, episode_reward_list
@@ -300,7 +300,7 @@ class ValueEstimationAlgorithmTester:
 		for s in range(self.nS):     
 			policy[s] = np.argmax(new_value_function[s, :])
 
-		utils.plot_change_in_each_step(None, episode_reward_list)
+		utils.show_result(None, episode_reward_list)
 		
 		return value_function, policy, episode_reward_list
 	

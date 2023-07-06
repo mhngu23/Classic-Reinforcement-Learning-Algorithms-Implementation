@@ -40,7 +40,7 @@ class Network(nn.Module):
         
 
 class REINFORCEAlgorithmTester:
-	def __init__(self, env):
+	def __init__(self, env, train_seed, training_time):
 		"""
 		Parameters
 		----------
@@ -52,16 +52,32 @@ class REINFORCEAlgorithmTester:
 			self.policy: Main training network.
 			self.optimizer: Optimization method.
 		"""
+		if torch.cuda.is_available() and train_seed is None:
+			self.num_episodes = 500
+		elif torch.cuda.is_available() and train_seed is not None:
+			self.num_episodes = len(train_seed)
+		else:
+			self.num_episodes = 50
+		self.episode_duration_list = []
 
-		self.rew_buffer = deque([0, 0], maxlen=100)
-		self.episode_reward = 0
-		
-		# Create the network/policy
-		self.policy = Network(env).to(device)
-		
-		self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
-						
-		self.main_iteration(env)
+		for _ in range(training_time):		
+			self.episode_reward = 0
+			self.reward_by_step = []
+			self.train_reward = []
+			self.episode_duration = []
+
+			# Create the network/policy
+			self.policy = Network(env).to(device)
+			
+			self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+
+			self.main_iteration(env)
+			self.episode_duration_list.append(self.episode_duration)
+			self.episode_duration = []
+
+		# utils.show_result(change_in_training=self.train_reward, algo_name="RF")
+		utils.show_result(change_in_training=self.episode_duration_list, algo_name="RF")
+
 	
 	def __calculate_discounted_returns__(self, rewards):
 		"""
@@ -75,54 +91,48 @@ class REINFORCEAlgorithmTester:
 		return returns
 
 	def main_iteration(self, env):
-		if torch.cuda.is_available():
-			num_episodes = 500
-		else:
-			num_episodes = 50
 			
-		mean_reward_list = []
-		t = trange(num_episodes)
 
-		for i_episode in t:
-			saved_log_probs = []
-			rewards = []
-			state, _ = env.reset()
-			for step in itertools.count():
-				action, log_prob = self.policy.act(state)
-				saved_log_probs.append(log_prob)
+		saved_log_probs = []
+		rewards = []
+		seed = 0
+		state, _ = env.reset(seed = seed)
 
-				# Execute action and observe result
-				new_states, rew, done, _, _ = env.step(action)
-				rewards.append(rew)
+		for step in range(1, 30000):
+			action, log_prob = self.policy.act(state)
+			saved_log_probs.append(log_prob)
 
-				# Update state with new_state
-				state = new_states
-				self.episode_reward += rew
-				if done: 
-					break
+			# Execute action and observe result
+			new_states, rew, done, _, _ = env.step(action)
+			rewards.append(rew)
 
-			# Calculate loss
-			discounted_returns = self.__calculate_discounted_returns__(rewards)
-			discounted_returns_t = torch.tensor(discounted_returns)
+			# Update state with new_state
+			state = new_states
+			self.episode_reward += rew
 
-			loss = []
-			for log_prob, disc_return in zip(saved_log_probs, discounted_returns_t):
-				loss.append(-log_prob.to(device) * disc_return.to(device))
-			loss = torch.cat(loss).sum()
+			if done: 
+				print(self.episode_reward+1)
+				self.episode_duration.append(self.episode_reward+1)
+				self.episode_reward = 0
 
-			# Gradient Descent
-			self.optimizer.zero_grad()
-			loss.backward(retain_graph=True)
-			self.optimizer.step()
-			
-			saved_log_probs = []
-			rewards = []
+				# Calculate loss
+				discounted_returns = self.__calculate_discounted_returns__(rewards)
+				discounted_returns_t = torch.tensor(discounted_returns)
 
+				loss = []
+				for log_prob, discounted_return in zip(saved_log_probs, discounted_returns_t):
+					loss.append(-log_prob.to(device) * discounted_return.to(device))
+				loss = torch.cat(loss).sum()
 
-			self.rew_buffer.append(self.episode_reward)
-			# Logging
-			print(f"\nEpisode reward is {self.episode_reward} and Average episode reward is {np.mean(self.rew_buffer)}") 
-			mean_reward_list.append(np.mean(self.rew_buffer))	
-			self.episode_reward = 0
-	
-		utils.plot_change_in_each_step(None, mean_reward_list)
+				# Gradient Descent
+				self.optimizer.zero_grad()
+				loss.backward(retain_graph=True)
+				self.optimizer.step()
+				
+				saved_log_probs = []
+				rewards = []
+
+				seed += 1
+				state, _ = env.reset(seed = seed)
+
+		

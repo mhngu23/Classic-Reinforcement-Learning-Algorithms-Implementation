@@ -1,5 +1,7 @@
 import argparse
 import utils 
+import warnings
+import csv
 
 import numpy as np
 import pandas as pd
@@ -11,7 +13,6 @@ from ValueEstimationAlgorithm import *
 from DeepQRLAlgorithm import *
 from REINFORCEAlgorithm import *
 from Actor_Critic_A2C_Algorithm import *
-import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -27,7 +28,7 @@ parser.add_argument(
     "--env",
     type=str,
     help="The name of the environment to run your algorithm on.",
-    choices=["Deterministic-4x4-FrozenLake-v0", "Stochastic-4x4-FrozenLake-v0", "TaxiEnv-v3", "CartPoleEnv-v0"],
+    choices=["Deterministic-4x4-FrozenLake-v0", "Stochastic-4x4-FrozenLake-v0", "TaxiEnv-v3", ],
     default="CartPoleEnv-v0",
 )
 
@@ -45,9 +46,9 @@ parser.add_argument(
     "-a",
     type=str,
     help="The type of algorithm that you will be using. classic_RL includes PI, VI, SARSA, Q_learning",
-    choices=["classic_RL", "policy_iteration", "value_iteration", "Comparing_Classic", "SARSA",
+    choices=["classic_RL", "advance_RL", "policy_iteration", "value_iteration", "Comparing_Classic", "SARSA",
               "Q_learning", "DQN", "REINFORCE", "A2C"],
-    default="A2C",
+    default="advance_RL",
 )
 
 parser.add_argument(
@@ -60,7 +61,7 @@ parser.add_argument(
 
 
 
-def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_steps=1000):
+def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_steps=10000):
     """
     This function does not need to be modified
     Renders policy once on environment. Watch your agent play!
@@ -74,9 +75,9 @@ def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_st
       The action to take at a given state
     """
     episode_reward_list_testing = []
-    env = gym.make(args.env, render_mode="human")
-
-    for seed in range(args.number_testing_sample):
+    env = gym.make(args.env, render_mode="rgb_array")
+    
+    for seed in range(10000, 10000+args.number_testing_sample):
         episode_reward = 0
         ob, _ = env.reset(seed = seed)
 
@@ -84,11 +85,14 @@ def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_st
             env.render()
             # time.sleep(0.01)
             if DQN is not None:
-                a = DQN.online_net.act(ob)
+                a = DQN.online_net.act(ob,  0.05)
+                name = "dqn_result.csv"
             elif REINFORCE is not None:
-                a, _ = REINFORCE.policy.act(ob)        
+                a, _ = REINFORCE.policy.act(ob)
+                name = "RF_result.csv"        
             elif A2C is not None:
-                a, _, _ = A2C.policy.act(ob)                 
+                a, _, _ = A2C.policy.act(ob)    
+                name = "A2C_result.csv"             
             else:
                 a = policy[ob]
             ob, rew, done, _, _ = env.step(a)
@@ -103,12 +107,19 @@ def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_st
                     max_steps
                 )
             )
+            episode_reward_list_testing.append(episode_reward)
         else:
             print("Testing episode reward: %f" % episode_reward)
             episode_reward_list_testing.append(episode_reward)
     
     mean_reward = np.mean(episode_reward_list_testing)
     std_reward = np.std(episode_reward_list_testing)
+    with open(name, 'w') as f:
+     
+        # using csv.writer method from CSV package
+        write = csv.writer(f)
+        
+        write.writerow(episode_reward_list_testing)
     return mean_reward, std_reward, episode_reward_list_testing
 
 def call_function(args_algorithm = "classic_RL"):
@@ -154,29 +165,45 @@ def call_function(args_algorithm = "classic_RL"):
         Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, None, Actor_Critic_algorithm_tester)    
     
+    elif args_algorithm == "advance_RL":
+        train_seed = np.arange(1, 1000, 1).tolist()
+        training_time = 5
+        print("\n" + "-" * 25 + "\nBeginning DQN\n" + "-" * 25)
+        deep_q_rl_algorithm_tester = DeepQRLAlgorithmTester(env, train_seed, training_time)
+        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, deep_q_rl_algorithm_tester)
+
+        print("\n" + "-" * 25 + "\nBeginning REINFORCE\n" + "-" * 25)
+        REINFORCE_algorithm_tester = REINFORCEAlgorithmTester(env, train_seed, training_time)
+        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, REINFORCE_algorithm_tester)
+        
+        print("\n" + "-" * 25 + "\nBeginning A2C\n" + "-" * 25)
+        Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env, train_seed, training_time)
+        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, None, Actor_Critic_algorithm_tester)    
+    
+
     # Testing classic_RL algorithms at once.
-    elif args_algorithm == "Comparing_Classic":
-        print("\n" + "-" * 25 + "\nBeginning Policy Iteration\n" + "-" * 25)
-        V_pi, p_pi = value_estimation_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
+    # elif args_algorithm == "Comparing_Classic":
+    #     print("\n" + "-" * 25 + "\nBeginning Policy Iteration\n" + "-" * 25)
+    #     V_pi, p_pi = value_estimation_algorithm_tester.policy_iteration(gamma=0.95, tol=1e-3)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
-        print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
-        V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3) 
-        mean_reward, std_reward, episode_reward_list_s = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
+    #     print("\n" + "-" * 25 + "\nBeginning Value Iteration\n" + "-" * 25)
+    #     V_pi, p_pi = value_estimation_algorithm_tester.value_iteration(gamma=0.95, tol=1e-3) 
+    #     mean_reward, std_reward, episode_reward_list_s = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
-        print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
-        Q_pi_SARSA, p_pi, episode_reward_list_s = value_estimation_algorithm_tester.SARSA(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
+    #     print("\n" + "-" * 25 + "\nBeginning SARSA\n" + "-" * 25)
+    #     Q_pi_SARSA, p_pi, episode_reward_list_s = value_estimation_algorithm_tester.SARSA(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing)
 
-        print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
-        Q_pi_Q_Learning, p_pi, episode_reward_list_q = value_estimation_algorithm_tester.Q_Learning(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
-        mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
-        utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing) 
+    #     print("\n" + "-" * 25 + "\nBeginning Q_learning\n" + "-" * 25)
+    #     Q_pi_Q_Learning, p_pi, episode_reward_list_q = value_estimation_algorithm_tester.Q_Learning(alpha=0.1, gamma=0.95, epsilon=0.1, n_episodes=10000)
+    #     mean_reward, std_reward, episode_reward_list_testing = render_testing(env, p_pi)
+    #     utils.plot_evaluating_result(mean_reward, std_reward, episode_reward_list_testing) 
 
-        utils.compare_training_sarsa_q_learning(episode_reward_list_s, episode_reward_list_q, Q_pi_SARSA, Q_pi_Q_Learning)
+    #     utils.compare_training_sarsa_q_learning(episode_reward_list_s, episode_reward_list_q, Q_pi_SARSA, Q_pi_Q_Learning)
 
 if __name__ == "__main__":
     # read in script argument

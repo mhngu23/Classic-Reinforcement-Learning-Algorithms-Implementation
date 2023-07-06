@@ -15,6 +15,8 @@ for env in env_dict:
         del  gym.envs.registration.registry[env]
     elif "CartPoleEnv-v0" in env:
         del  gym.envs.registration.registry[env]
+    elif 'Pendulum-v1' in env:
+        del  gym.envs.registration.registry[env]
 
 
 register(
@@ -39,3 +41,9 @@ register(
     id="CartPoleEnv-v0",
     entry_point="gymnasium.envs.classic_control.cartpole:CartPoleEnv"    
 )
+
+register(
+    id="Pendulum-v1",
+    entry_point="gymnasium.envs.classic_control.pendulum:PendulumEnv"    
+)
+
