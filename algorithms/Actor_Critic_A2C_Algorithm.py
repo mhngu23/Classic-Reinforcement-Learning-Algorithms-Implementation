@@ -15,7 +15,7 @@ import utils
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-warnings.filterwarnings("ignore", category=UserWarning)
+# warnings.filterwarnings("ignore", category=UserWarning)
 
 GAMMA=0.99
 
@@ -57,16 +57,16 @@ class ActorCriticAlgorithmTester:
 			self.policy: Main training network.
 			self.optimizer: Optimization method.
 		"""
-		if torch.cuda.is_available() and train_seed is None:
-			self.num_episodes = 500
-		elif torch.cuda.is_available() and train_seed is not None:
-			self.num_episodes = len(train_seed)
-		else:
-			self.num_episodes = 50
+		# if torch.cuda.is_available() and train_seed is None:
+		# 	self.num_episodes = 500
+		# elif torch.cuda.is_available() and train_seed is not None:
+		# 	self.num_episodes = len(train_seed)
+		# else:
+		# 	self.num_episodes = 50
 		
 		self.episode_duration_list = []
 
-		for _ in range(training_time):		
+		for training in range(training_time):		
 			self.episode_reward = 0
 			self.reward_by_step = []
 			self.train_reward = []
@@ -75,18 +75,20 @@ class ActorCriticAlgorithmTester:
 			# Create the network/policy
 			self.policy = Network(env).to(device)
 			
-			self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+			self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=1e-4)
 		# self.state_value_optimizer = torch.optim.Adam(self.state_value.parameters(), lr=5e-4)
-			self.main_iteration(env)
+			self.main_iteration(env, training)
 			self.episode_duration_list.append(self.episode_duration)
 			self.episode_duration = []
+
+			torch.save(self.policy, f"A2C_model_{training}.pt")
+
 
 		# utils.show_result(change_in_training=self.train_reward, algo_name = "A2C")
 		utils.show_result(change_in_training=self.episode_duration_list, algo_name = "A2C")
 
-
 	
-	def __calculate_discounted_returns__(self, rewards):
+	def 	__calculate_discounted_returns__(self, rewards):
 		"""
 		Function to calculate the discounted return associated with each state
 		"""
@@ -97,53 +99,51 @@ class ActorCriticAlgorithmTester:
 			returns.appendleft(rewards[t] + GAMMA * discounted_return_current_state)
 		return returns
 
-	def main_iteration(self, env):
-		# t = trange(self.num_episodes)
+	def main_iteration(self, env, training):
 		seed = 0
 		rewards = []
 		saved_actions = []
 		value_losses = []
 		policy_losses = []
-		I = 0
 		state, _ = env.reset(seed = seed)
 
-		for step in range(1, 30000):
+		for step in range(1, 35000):
+			print(f"Training number {training}, Step number {step}")
 			action, log_prob, state_value = self.policy.act(state)
 
 			# Execute action and observe result
 			new_state, rew, done, _, _ = env.step(action)
 			rewards.append(rew)
-			saved_actions.append((log_prob, state_value, I))
+			saved_actions.append((log_prob, state_value))
 			
 			# Update state with new_state
 			state = new_state	
-			I *= GAMMA
 			
 			self.episode_reward += rew
-
+			self.episode_duration.append(self.episode_reward)
 			if done:
-				print(self.episode_reward+1)
-				self.episode_duration.append(self.episode_reward+1)
+				# self.episode_duration.append(self.episode_reward+1)
 				self.episode_reward = 0	
 				
 				# Calculate loss
 				discounted_returns = self.__calculate_discounted_returns__(rewards)
 				discounted_returns_t = torch.tensor(discounted_returns)
 
-				for (log_prob, value, I), R in zip(saved_actions, discounted_returns_t):
+				for (log_prob, value), R in zip(saved_actions, discounted_returns_t):
 					advantage = R - value.item()
 
 					# calculate actor (policy) loss
-					policy_losses.append(-log_prob * advantage * I)
+					policy_losses.append(-log_prob * advantage)
 
 					# calculate critic (value) loss using L1 smooth loss
-					value_losses.append(F.smooth_l1_loss(value.to(device), torch.tensor([R]).to(device)))
+					value_losses.append(F.smooth_l1_loss(value.to(device), torch.tensor([[R]]).to(device)))
 				
-				# sum up all the values of policy_losses and value_losses		
+				# sum up all the values of policy_losses and value_losses	
+				self.policy_optimizer.zero_grad()
+	
 				loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
 
 
-				self.policy_optimizer.zero_grad()
 				loss.backward(retain_graph=True)
 				self.policy_optimizer.step()
 

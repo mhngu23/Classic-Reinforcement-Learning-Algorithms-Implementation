@@ -9,10 +9,10 @@ import gymnasium as gym
 import matplotlib.pyplot as plt 
 
 from testing_envs import *
-from ValueEstimationAlgorithm import *
-from DeepQRLAlgorithm import *
-from REINFORCEAlgorithm import *
-from Actor_Critic_A2C_Algorithm import *
+from algorithms.ValueEstimationAlgorithm import *
+from algorithms.DeepQRLAlgorithm import *
+from algorithms.REINFORCEAlgorithm import *
+from algorithms.Actor_Critic_A2C_Algorithm import *
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -58,8 +58,6 @@ parser.add_argument(
     help="The number of testing samples.",
     default=100,
 )
-
-
 
 def render_testing(env, policy, DQN = None, REINFORCE = None, A2C = None, max_steps=10000):
     """
@@ -161,8 +159,10 @@ def call_function(args_algorithm = "classic_RL"):
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, REINFORCE_algorithm_tester)
 
     elif args_algorithm == "A2C":
+        train_seed = np.arange(1, 200, 1).tolist()
+        training_time = 5
         print("\n" + "-" * 25 + "\nBeginning A2C\n" + "-" * 25)
-        Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env)
+        Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env, train_seed, training_time)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, None, Actor_Critic_algorithm_tester)    
     
     elif args_algorithm == "advance_RL":
@@ -179,7 +179,6 @@ def call_function(args_algorithm = "classic_RL"):
         print("\n" + "-" * 25 + "\nBeginning A2C\n" + "-" * 25)
         Actor_Critic_algorithm_tester = ActorCriticAlgorithmTester(env, train_seed, training_time)
         mean_reward, std_reward, episode_reward_list_testing = render_testing(env, None, None, None, Actor_Critic_algorithm_tester)    
-    
 
     # Testing classic_RL algorithms at once.
     # elif args_algorithm == "Comparing_Classic":
@@ -216,9 +215,7 @@ if __name__ == "__main__":
     # Print action spaces and observation spaces
     print("The numbers of action space are: ", env.action_space)
     print("The numbers of observation space are: ", env.observation_space)
-    # print(env.P)
-
-
+    
     call_function(args.algorithm)
 
 

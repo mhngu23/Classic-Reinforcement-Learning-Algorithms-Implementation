@@ -52,15 +52,16 @@ class REINFORCEAlgorithmTester:
 			self.policy: Main training network.
 			self.optimizer: Optimization method.
 		"""
-		if torch.cuda.is_available() and train_seed is None:
-			self.num_episodes = 500
-		elif torch.cuda.is_available() and train_seed is not None:
-			self.num_episodes = len(train_seed)
-		else:
-			self.num_episodes = 50
+		# if torch.cuda.is_available() and train_seed is None:
+		# 	self.num_episodes = 500
+		# elif torch.cuda.is_available() and train_seed is not None:
+		# 	self.num_episodes = len(train_seed)
+		# else:
+		# 	self.num_episodes = 50
+		
 		self.episode_duration_list = []
 
-		for _ in range(training_time):		
+		for training in range(training_time):		
 			self.episode_reward = 0
 			self.reward_by_step = []
 			self.train_reward = []
@@ -69,11 +70,13 @@ class REINFORCEAlgorithmTester:
 			# Create the network/policy
 			self.policy = Network(env).to(device)
 			
-			self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+			self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=1e-4)
 
-			self.main_iteration(env)
+			self.main_iteration(env, training)
 			self.episode_duration_list.append(self.episode_duration)
 			self.episode_duration = []
+
+			torch.save(self.policy, f"RF_model_{training}.pt")
 
 		# utils.show_result(change_in_training=self.train_reward, algo_name="RF")
 		utils.show_result(change_in_training=self.episode_duration_list, algo_name="RF")
@@ -90,7 +93,7 @@ class REINFORCEAlgorithmTester:
 			returns.appendleft(rewards[t] + GAMMA * discounted_return_current_state)
 		return returns
 
-	def main_iteration(self, env):
+	def main_iteration(self, env, training):
 			
 
 		saved_log_probs = []
@@ -98,7 +101,8 @@ class REINFORCEAlgorithmTester:
 		seed = 0
 		state, _ = env.reset(seed = seed)
 
-		for step in range(1, 30000):
+		for step in range(1, 35000):
+			print(f"Training number {training}, Step number {step}")
 			action, log_prob = self.policy.act(state)
 			saved_log_probs.append(log_prob)
 
@@ -109,10 +113,10 @@ class REINFORCEAlgorithmTester:
 			# Update state with new_state
 			state = new_states
 			self.episode_reward += rew
-
+			self.episode_duration.append(self.episode_reward)
 			if done: 
-				print(self.episode_reward+1)
-				self.episode_duration.append(self.episode_reward+1)
+				# print(self.episode_reward+1)
+				# self.episode_duration.append(self.episode_reward)
 				self.episode_reward = 0
 
 				# Calculate loss
