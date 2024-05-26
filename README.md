@@ -56,6 +56,6 @@ This repository contains implementations of various reinforcement learning (RL) 
   - Utility functions used across different scripts and notebooks.
 
 # References
-Sutton, R. S., & Barto, A. G. (2018). Reinforcement Learning: An Introduction. MIT Press.
-Mnih, V., et al. (2015). "Human-level control through deep reinforcement learning". Nature, 518(7540), 529-533.
-Schulman, J., et al. (2017). "Proximal Policy Optimization Algorithms". arXiv preprint arXiv:1707.06347.
+1. Sutton, R. S., & Barto, A. G. (2018). Reinforcement Learning: An Introduction. MIT Press.
+2. Mnih, V., et al. (2015). "Human-level control through deep reinforcement learning". Nature, 518(7540), 529-533.
+3. Schulman, J., et al. (2017). "Proximal Policy Optimization Algorithms". arXiv preprint arXiv:1707.06347.
